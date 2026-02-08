@@ -8,6 +8,9 @@ def evaluate_oi_signal(
     price_deltas: dict[str, float | None],
     oi_threshold: float,
 ) -> dict[str, dict]:
+    # Prevent division by zero
+    if oi_threshold <= 0:
+        oi_threshold = 1e-9
     """Evaluate OI vs Price divergence signal.
 
     Returns {coin: {"strength": 0-1, "direction": "short"|"long", "oi_delta": float, "price_delta": float}}

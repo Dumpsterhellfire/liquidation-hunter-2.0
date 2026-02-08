@@ -1,4 +1,6 @@
 import time
+import json
+from pathlib import Path
 from src.execution.executor import Executor
 from src.utils.logger import setup_logger
 
@@ -8,10 +10,32 @@ logger = setup_logger("executor.paper")
 class PaperExecutor(Executor):
     """Simulated trade executor — tracks virtual PnL."""
 
-    def __init__(self):
+    def __init__(self, state_path: str = "data/paper_state.json"):
+        self.state_path = Path(state_path)
+        self.state_path.parent.mkdir(parents=True, exist_ok=True)
         self.open_trades: list[dict] = []
         self.closed_trades: list[dict] = []
         self.total_pnl: float = 0.0
+        self._load_state()
+
+    def _load_state(self):
+        if self.state_path.exists():
+            try:
+                data = json.loads(self.state_path.read_text())
+                self.open_trades = data.get("open_trades", [])
+                self.closed_trades = data.get("closed_trades", [])
+                self.total_pnl = data.get("total_pnl", 0.0)
+            except Exception:
+                pass
+
+    def _save_state(self):
+        data = {
+            "open_trades": self.open_trades,
+            "closed_trades": self.closed_trades[-200:],
+            "total_pnl": self.total_pnl,
+            "updated": time.time(),
+        }
+        self.state_path.write_text(json.dumps(data, indent=2))
 
     def execute_trade(self, decision: dict, capital: float, config: dict) -> dict | None:
         trade = {
@@ -28,6 +52,7 @@ class PaperExecutor(Executor):
         }
 
         self.open_trades.append(trade)
+        self._save_state()
         logger.info(
             f"PAPER TRADE: {decision['coin']} {decision['direction'].upper()} "
             f"${capital:.2f} confidence={decision['confidence']:.1%}"
@@ -91,6 +116,7 @@ class PaperExecutor(Executor):
                 still_open.append(trade)
 
         self.open_trades = still_open
+        self._save_state()
         return closed
 
     def get_open_positions(self) -> list[dict]:

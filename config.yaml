@@ -1,20 +1,28 @@
-mode: "alert"  # alert | paper | live
+mode: "paper"  # alert | paper | live
 poll_interval_seconds: 30
 
 signals:
-  funding_rate_threshold: 0.0005  # 0.05%
-  oi_delta_threshold: 5.0         # 5% change in 4h
-  liquidation_proximity: 1.5      # % distance from current price
-  min_confidence: 0.6             # combined signal threshold to trigger
+  funding_rate_threshold: 0.0005      # 0.05% (baseline)
+  oi_delta_threshold: 5.0             # 5% change in 4h (baseline)
+  liquidation_proximity: 1.5          # % distance from current price
+  min_confidence: 0.55                # combined signal threshold to trigger
+  min_wall_notional: 250000           # orderbook wall confirmation ($)
+  min_atr_pct: 0.3                    # require ATR% >= this
+  dynamic_funding_window: 96          # 48h @ 30s intervals approx
+  dynamic_oi_window: 96
+  volume_baseline_usd: 25000          # liq cluster volume normalization
 
 total_capital_usd: 500
 
 execution:
-  position_size_pct: 20            # 20% of capital per trade = $100
-  max_positions: 3                 # max 3 concurrent = $300 max exposure
+  position_size_pct: 15               # base position size
+  max_positions: 3                    # max 3 concurrent
   take_profit_pct: 2.0
   stop_loss_pct: 1.0
   timeout_minutes: 30
+  size_by_confidence: true
+  min_size_pct: 10
+  max_size_pct: 30
 
 whale_wallets:
   # $25M equity, 85 positions - massive multi-asset trader

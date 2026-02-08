@@ -18,10 +18,13 @@ def fetch_orderbook(client, coin: str) -> dict:
 def find_depth_clusters(book: dict, top_n: int = 5) -> dict:
     """Find the largest order clusters in the book.
 
-    Returns {"bid_walls": [(price, size)], "ask_walls": [(price, size)]}
-    sorted by size descending.
+    Returns {"bid_walls": [(price, size, notional)], "ask_walls": [(price, size, notional)]}
+    sorted by notional descending.
     """
-    bid_walls = sorted(book["bids"], key=lambda x: x[1], reverse=True)[:top_n]
-    ask_walls = sorted(book["asks"], key=lambda x: x[1], reverse=True)[:top_n]
+    bid_walls = [(px, sz, px * sz) for px, sz in book.get("bids", [])]
+    ask_walls = [(px, sz, px * sz) for px, sz in book.get("asks", [])]
+
+    bid_walls = sorted(bid_walls, key=lambda x: x[2], reverse=True)[:top_n]
+    ask_walls = sorted(ask_walls, key=lambda x: x[2], reverse=True)[:top_n]
 
     return {"bid_walls": bid_walls, "ask_walls": ask_walls}

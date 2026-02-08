@@ -127,14 +127,43 @@ def run_cycle(client: HyperliquidClient, config: dict, executor):
             if positions and price:
                 clusters = build_liquidation_clusters(positions, price)
                 sig_result = evaluate_liquidation_signal(
-                    clusters, price, sig_cfg["liquidation_proximity"]
+                    clusters,
+                    price,
+                    sig_cfg["liquidation_proximity"],
+                    sig_cfg.get("volume_baseline_usd", 100_000),
                 )
                 if sig_result:
                     liq_signals[coin] = sig_result
 
     # 8. Evaluate signals
-    funding_sigs = evaluate_funding_signal(funding_rates, sig_cfg["funding_rate_threshold"])
-    oi_sigs = evaluate_oi_signal(oi_deltas, price_deltas, sig_cfg["oi_delta_threshold"])
+    # Dynamic thresholds (rolling history)
+    if not hasattr(run_cycle, "_fund_hist"):
+        run_cycle._fund_hist = {}
+        run_cycle._oi_hist = {}
+    for coin, rate in funding_rates.items():
+        run_cycle._fund_hist.setdefault(coin, []).append(rate)
+        run_cycle._fund_hist[coin] = run_cycle._fund_hist[coin][-sig_cfg.get("dynamic_funding_window", 96):]
+    for coin, od in oi_deltas.items():
+        if od is not None:
+            run_cycle._oi_hist.setdefault(coin, []).append(od)
+            run_cycle._oi_hist[coin] = run_cycle._oi_hist[coin][-sig_cfg.get("dynamic_oi_window", 96):]
+
+    def dynamic_threshold(hist: list[float], base: float) -> float:
+        if len(hist) < 5:
+            return base
+        avg = sum(abs(x) for x in hist) / len(hist)
+        return max(base, avg * 1.5)
+
+    fund_thr = {}
+    oi_thr = {}
+    for coin in coins:
+        fund_thr[coin] = dynamic_threshold(run_cycle._fund_hist.get(coin, []), sig_cfg["funding_rate_threshold"])
+        oi_thr[coin] = dynamic_threshold(run_cycle._oi_hist.get(coin, []), sig_cfg["oi_delta_threshold"])
+
+    funding_sigs = evaluate_funding_signal(funding_rates, 0)  # we'll filter by per-coin threshold below
+    funding_sigs = {c: s for c, s in funding_sigs.items() if abs(s["rate"]) >= fund_thr.get(c, sig_cfg["funding_rate_threshold"])}
+    oi_sigs = evaluate_oi_signal(oi_deltas, price_deltas, 0)
+    oi_sigs = {c: s for c, s in oi_sigs.items() if abs(s["oi_delta"]) >= oi_thr.get(c, sig_cfg["oi_delta_threshold"])}
 
     # 9. Aggregate
     decisions = aggregate_signals(
@@ -156,19 +185,58 @@ def run_cycle(client: HyperliquidClient, config: dict, executor):
             logger.info(f"Already positioned in {decision['coin']}, skipping")
             continue
 
-        executor.execute_trade(decision, position_size, exe_cfg)
+        # Order book wall confirmation
+        wall = wall_confirm.get(decision["coin"], {}) if 'wall_confirm' in locals() else {}
+        min_wall = sig_cfg.get("min_wall_notional", 0)
+        if min_wall:
+            if decision["direction"] == "long":
+                ask = wall.get("ask")
+                if not ask or ask[2] < min_wall:
+                    logger.info(f"{decision['coin']} skipped: no strong ask wall >= ${min_wall}")
+                    continue
+            else:
+                bid = wall.get("bid")
+                if not bid or bid[2] < min_wall:
+                    logger.info(f"{decision['coin']} skipped: no strong bid wall >= ${min_wall}")
+                    continue
 
-    # 11. Log order book depth for context
+        # ATR/volatility filter (simple proxy using 1h candles)
+        min_atr = sig_cfg.get("min_atr_pct", 0)
+        if min_atr:
+            try:
+                # use 24h candle snapshot (1h interval)
+                candles = client._post({"type": "candleSnapshot", "req": {"coin": decision["coin"], "interval": "1h", "startTime": int(time.time() - 26*3600)*1000, "endTime": int(time.time())*1000}})
+                highs = [float(c["h"]) for c in candles]
+                lows = [float(c["l"]) for c in candles]
+                if highs and lows:
+                    atr = sum((h-l) for h,l in zip(highs, lows)) / len(highs)
+                    atr_pct = atr / current_prices.get(decision["coin"], 1) * 100
+                    if atr_pct < min_atr:
+                        logger.info(f"{decision['coin']} skipped: ATR {atr_pct:.2f}% < {min_atr}%")
+                        continue
+            except Exception:
+                pass
+
+        # Confidence-based sizing
+        trade_capital = position_size
+        if exe_cfg.get("size_by_confidence"):
+            conf = decision.get("confidence", 0.5)
+            min_pct = exe_cfg.get("min_size_pct", 10)
+            max_pct = exe_cfg.get("max_size_pct", 30)
+            scaled = min_pct + (max_pct - min_pct) * conf
+            trade_capital = capital * scaled / 100
+
+        executor.execute_trade(decision, trade_capital, exe_cfg)
+
+    # 11. Order book wall confirmation (used as filter)
+    wall_confirm = {}
     for coin in coins:
         try:
             book = fetch_orderbook(client, coin)
             walls = find_depth_clusters(book)
-            if walls["bid_walls"]:
-                best_bid = walls["bid_walls"][0]
-                logger.debug(f"{coin} biggest bid wall: {best_bid[1]:.2f} @ {best_bid[0]:.2f}")
-            if walls["ask_walls"]:
-                best_ask = walls["ask_walls"][0]
-                logger.debug(f"{coin} biggest ask wall: {best_ask[1]:.2f} @ {best_ask[0]:.2f}")
+            best_bid = walls["bid_walls"][0] if walls["bid_walls"] else None
+            best_ask = walls["ask_walls"][0] if walls["ask_walls"] else None
+            wall_confirm[coin] = {"bid": best_bid, "ask": best_ask}
         except Exception:
             pass
 

@@ -51,7 +51,7 @@ def build_liquidation_clusters(
 
 
 def evaluate_liquidation_signal(
-    clusters: list[dict], current_price: float, proximity_pct: float
+    clusters: list[dict], current_price: float, proximity_pct: float, volume_baseline: float = 100_000
 ) -> dict | None:
     """Check if a dense liquidation cluster is within proximity of current price.
 
@@ -73,8 +73,8 @@ def evaluate_liquidation_signal(
 
     # Strength based on how close and how dense
     distance_factor = 1.0 - (best["distance_pct"] / proximity_pct)
-    # Normalize volume — anything above 100k is considered significant
-    volume_factor = min(best["volume"] / 100_000, 1.0)
+    # Normalize volume — baseline configurable
+    volume_factor = min(best["volume"] / max(volume_baseline, 1), 1.0)
     strength = (distance_factor * 0.6 + volume_factor * 0.4)
 
     # Cascade direction is the same as what gets liquidated

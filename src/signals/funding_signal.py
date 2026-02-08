@@ -4,6 +4,9 @@ logger = setup_logger("signal.funding")
 
 
 def evaluate_funding_signal(funding_rates: dict[str, float], threshold: float) -> dict[str, dict]:
+    # Prevent division by zero
+    if threshold <= 0:
+        threshold = 1e-9
     """Evaluate funding rate signal for each coin.
 
     Returns {coin: {"strength": 0-1, "direction": "short"|"long", "rate": float}}
