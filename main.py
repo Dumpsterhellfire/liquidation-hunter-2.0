@@ -148,6 +148,20 @@ def run_cycle(client: HyperliquidClient, config: dict, executor):
             run_cycle._wallets_cache = merged
             run_cycle._last_wallet_reload = time.time()
             logger.info(f"Wallet list refreshed: {len(merged)} wallets")
+            # persist refresh timestamp for Crabwalk
+            try:
+                import json
+                from pathlib import Path
+                p = Path("/home/openclaw/.openclaw/workspace/liquidation-hunter/data/paper_state.json")
+                if p.exists():
+                    data = json.loads(p.read_text())
+                else:
+                    data = {}
+                data["last_wallet_refresh"] = run_cycle._last_wallet_reload
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_text(json.dumps(data, indent=2))
+            except Exception:
+                pass
         whale_wallets = run_cycle._wallets_cache or whale_wallets
     except Exception:
         pass
