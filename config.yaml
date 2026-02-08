@@ -1,0 +1,23 @@
+mode: "alert"  # alert | paper | live
+poll_interval_seconds: 30
+
+signals:
+  funding_rate_threshold: 0.0005  # 0.05%
+  oi_delta_threshold: 5.0         # 5% change in 4h
+  liquidation_proximity: 1.5      # % distance from current price
+  min_confidence: 0.6             # combined signal threshold to trigger
+
+total_capital_usd: 500
+
+execution:
+  position_size_pct: 20            # 20% of capital per trade = $100
+  max_positions: 3                 # max 3 concurrent = $300 max exposure
+  take_profit_pct: 2.0
+  stop_loss_pct: 1.0
+  timeout_minutes: 30
+
+whale_wallets: []
+
+coins:
+  - "BTC"
+  - "ETH"
