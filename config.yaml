@@ -27,6 +27,11 @@ execution:
 whale_wallets:
   # $25M equity, 85 positions - massive multi-asset trader
   - "0xecb63caa47c7c4e77f60f1ce858cf28dc2b82b00"
+
+wallet_sources:
+  file_path: "/home/openclaw/.openclaw/workspace/liquidation-hunter/whales.txt"
+  reload_minutes: 10
+  url: ""  # optional: public URL returning newline-separated wallets
   # $19M equity, 6 positions - large diversified long
   - "0x31dea2516beee92135b96f464eeec3cf292a13f2"
   # $7.6M equity, 49 positions - active multi-asset trader

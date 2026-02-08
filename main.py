@@ -118,6 +118,40 @@ def run_cycle(client: HyperliquidClient, config: dict, executor):
 
     # 7. Scan whale wallets for liquidation map
     whale_wallets = config.get("whale_wallets", [])
+    # auto-reload from file/url
+    src_cfg = config.get("wallet_sources", {})
+    try:
+        reload_minutes = src_cfg.get("reload_minutes", 10)
+        if not hasattr(run_cycle, "_last_wallet_reload"):
+            run_cycle._last_wallet_reload = 0
+            run_cycle._wallets_cache = []
+        if time.time() - run_cycle._last_wallet_reload > reload_minutes * 60:
+            wallets = []
+            file_path = src_cfg.get("file_path")
+            if file_path:
+                try:
+                    with open(file_path, "r") as f:
+                        wallets += [l.strip() for l in f.readlines() if l.strip()]
+                except Exception:
+                    pass
+            url = src_cfg.get("url")
+            if url:
+                try:
+                    import requests
+                    r = requests.get(url, timeout=10)
+                    if r.ok:
+                        wallets += [l.strip() for l in r.text.splitlines() if l.strip()]
+                except Exception:
+                    pass
+            # merge + dedupe + fallback to config list
+            merged = list(dict.fromkeys((whale_wallets or []) + wallets))
+            run_cycle._wallets_cache = merged
+            run_cycle._last_wallet_reload = time.time()
+            logger.info(f"Wallet list refreshed: {len(merged)} wallets")
+        whale_wallets = run_cycle._wallets_cache or whale_wallets
+    except Exception:
+        pass
+
     liq_signals = {}
     if whale_wallets:
         whale_positions = scan_whale_wallets(client, whale_wallets, coins)
