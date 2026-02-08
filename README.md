@@ -45,3 +45,39 @@ Layer in a small "nudge" trade — if price is sitting just above a massive liqu
 ## Expected Edge
 
 55-65% win rate with 2:1+ reward/risk when cascades trigger. The key is patience — only take setups where the liquidation map is dense.
+
+## Hyperliquid Data Visibility
+
+### What IS Visible On-Chain
+
+- **Open orders** — The order book is fully on-chain. You can query any wallet's open orders via the `frontendOpenOrders` API endpoint, which includes `orderType` and `triggerCondition` for conditional orders (TP/SL).
+- **Positions** — Every wallet's position size, entry price, and liquidation price is public.
+- **Trade history** — All fills are on-chain and queryable.
+
+### Stop Loss Visibility
+
+TP/SL orders on Hyperliquid are **trigger orders** — they only become market orders when the price threshold is hit. They use the **mark price** to trigger. These trigger orders are stored on-chain and can be queried per wallet.
+
+However:
+- There is **no single API endpoint** that aggregates all traders' SL levels into a heatmap
+- You need to **scan wallets individually** to build an aggregate SL map
+- Big whale wallets can be tracked via tools like CoinGlass
+
+### Building the Edge
+
+Combine these on-chain data sources:
+1. **Liquidation levels** — Calculated from position + leverage, available via heatmap tools
+2. **Individual whale SL levels** — Queryable per wallet via Hyperliquid API
+3. **Order book depth** — On-chain, shows where limit orders cluster
+
+This gives more data than any CEX — you can build a custom SL heatmap by scanning known active wallets via the Hyperliquid API.
+
+## Free Liquidation Heatmap Tools
+
+| Tool | URL |
+|------|-----|
+| CoinGlass | https://www.coinglass.com/hyperliquid-liquidation-map |
+| HyperDash | https://hyperdash.info/liqmap |
+| Kiyotaka | https://kiyotaka.ai |
+| Trading Different | https://tradingdifferent.com/dashboard/liquidation-heatmap |
+| CoinAnk | https://coinank.com/chart/derivatives/liq-heat-map |
