@@ -7,7 +7,7 @@ DEFAULT_CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "
 
 def load_config(path: str = None) -> dict:
     path = path or DEFAULT_CONFIG_PATH
-    with open(path, "r") as f:
+    with open(path, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
 
     # Defaults
